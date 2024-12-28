@@ -39,6 +39,9 @@ BOMB_FILE :: "bomb.png"
 
 buttons : [100]Button
 
+num_mines:int = 25
+num_reaveled:= make(map[int]bool)
+
 
 
 quad_vao:u32
@@ -380,7 +383,7 @@ reveal_all::proc()
 {
     for &b in buttons
     {
-        expose_button(&b)
+        get_adjacent_in_color(&b)
     }
 }
 
@@ -409,11 +412,13 @@ free_zero_adjacent::proc(button:^Button)
                 if buttons[new_col + 10 * new_row].hint == 0
                 {
                     get_adjacent_in_color(&buttons[new_col + 10 * new_row])
+                    num_reaveled[cast(int)buttons[new_col + 10 * new_row]._index] = true
                     free_zero_adjacent(&buttons[new_col + 10 * new_row])
                 }
                 if buttons[new_col + 10 * new_row].hint >= 1
                 {
                     get_adjacent_in_color(&buttons[new_col + 10 * new_row])
+                    num_reaveled[cast(int)buttons[new_col + 10 * new_row]._index] = true
                 }
             }
         }
@@ -434,10 +439,12 @@ expose_button::proc(button:^Button)
     {
         log_info("HINTLESS: ")
         get_adjacent_in_color(button)
+        num_reaveled[cast(int)button._index] = true
         free_zero_adjacent(button)
     }
     else
     {
+        num_reaveled[cast(int)button._index] = true
         get_adjacent_in_color(button)
     }
 }
@@ -746,8 +753,10 @@ game_over_ui:Panel =
 
 on_game_startup::proc()
 {
-    draw_button(&start_button)
-    draw_button(&exit_button)
+    // draw_button(&start_button)
+    // draw_button(&exit_button)
+
+    draw_panel(&game_over_ui)
 }
 
 on_game_over::proc()
@@ -755,15 +764,23 @@ on_game_over::proc()
     draw_panel(&game_over_ui)
 }
 
-user_game_on_input::proc()
+is_mouse_clicked:bool = false
+user_game_on_input::proc()->bool
 {
-    if glfw.GetKey(window,glfw.KEY_SPACE) == glfw.PRESS
+    if game_state != GAME_STATE.GAME_ON
     {
+        return false
+    }
+    if glfw.GetKey(window,glfw.KEY_TAB) == glfw.PRESS && !is_mouse_clicked
+    {
+        is_mouse_clicked = true
         reveal_all();
+        return true
     }
 
-    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS 
+    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS && !is_mouse_clicked
     {
+        is_mouse_clicked = true
         for &b, n in buttons
         {
             if on_button_hover(window,&b, 1)
@@ -771,10 +788,12 @@ user_game_on_input::proc()
                 on_game_button_clicked(&b)
             }
         }   
+        return true
     }
 
-    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_2) == glfw.PRESS 
+    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_2) == glfw.PRESS && !is_mouse_clicked
     {
+        is_mouse_clicked = true
         for &b, n in buttons
         {
             if on_button_hover(window,&b, 1)
@@ -782,38 +801,88 @@ user_game_on_input::proc()
                 on_game_button_sec_clicked(&b)
             }
         }  
+        return true
     }
+    return false
 }
 
-user_game_yts_input::proc()
+user_game_yts_input::proc() ->bool
 {
-    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS
-    {
-        if on_button_hover(window,&start_button, 1)
-        {
-            on_start_button_clicked(&start_button)
-        }  
+    // if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS && !is_mouse_clicked
+    // {
+    //     is_mouse_clicked = true
+    //     if on_button_hover(window,&start_button, 1)
+    //     {
+    //         on_start_button_clicked(&start_button)
+    //     }  
         
-        if on_button_hover(window,&exit_button, 1)
-        {
-            glfw.SetWindowShouldClose(window,true)
-        } 
+    //     if on_button_hover(window,&exit_button, 1)
+    //     {
+    //         glfw.SetWindowShouldClose(window,true)
+    //     } 
 
+    //     return true
+
+    // }
+
+    if glfw.GetKey(window,glfw.KEY_SPACE) == glfw.PRESS
+    {
+        game_state = GAME_STATE.GAME_ON
+        clear(&num_reaveled)
+        return true
     }
+
+    return false
 }
 
-user_game_over_input::proc()
+user_game_over_input::proc() ->bool
 {
-    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS
+    /*
+    if glfw.GetMouseButton(window,glfw.MOUSE_BUTTON_1) == glfw.PRESS && !is_mouse_clicked
     {
+        is_mouse_clicked = true
         if on_panel_hover(window,&game_over_ui, 1)
         {
             initialize_buttons(&buttons)
             clear(&visited)
-
             game_state = GAME_STATE.GAME_YTS
         }  
+        return true
     }
+    */
+
+    if glfw.GetKey(window,glfw.KEY_SPACE) == glfw.PRESS
+    {
+        initialize_buttons(&buttons)
+        clear(&visited)
+        clear(&num_reaveled)
+        game_state = GAME_STATE.GAME_ON
+        return true
+    }
+
+    if glfw.GetKey(window,glfw.KEY_BACKSPACE) == glfw.PRESS
+    {
+        game_state = GAME_STATE.GAME_ON
+        return true
+    }
+    return false
+}
+
+
+user_input::proc()->bool
+{
+    #partial switch game_state{
+        case .GAME_ON:
+            user_game_on_input()
+            return true
+        case .GAME_OVER:
+            user_game_over_input()
+            return true
+        case .GAME_YTS:
+            user_game_yts_input()
+            return true
+    }
+    return false
 }
 
 main::proc()
@@ -858,7 +927,7 @@ main::proc()
  
      gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 0)
      gl.EnableVertexAttribArray(0)
- 
+
      gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 3 * size_of(f32))
      gl.EnableVertexAttribArray(1)
  
@@ -891,37 +960,37 @@ main::proc()
 
         glfw.PollEvents()
         {
-            
+            user_input()
             gl.Uniform1i(gl.GetUniformLocation(Renderer.program,"font_texture"),0)
-
-
-            // draw_button(&bottom)
+            is_mouse_clicked = false
+            
             if game_state == GAME_STATE.GAME_YTS
             {
-                user_game_yts_input()
-                on_game_startup()
+                on_game_startup()   
             }
             else if game_state == GAME_STATE.GAME_ON
             {
-                user_game_on_input()
                 for &b in buttons
                 {
                     draw_button(&b)
                 }
-
-                fps+=1
-                if(glfw.GetTime() - new_frame_time >= 1.0)
-                {
-                    //log_info("FPS: ", fps)
-                    fps = 0
-                    new_frame_time = glfw.GetTime()
-                }
             }
             else if game_state == GAME_STATE.GAME_OVER
             {
-                user_game_over_input()
                 on_game_over()
             }
+
+            if len(num_reaveled) == 75
+            {
+                log_info("GAME WON")
+            }
+        }
+        fps+=1
+        if(glfw.GetTime() - new_frame_time >= 1.0)
+        {
+            //log_info("FPS: ", fps)
+            fps = 0
+            new_frame_time = glfw.GetTime()
         }
         glfw.SwapBuffers(window)
 
