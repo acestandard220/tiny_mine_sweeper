@@ -13,7 +13,9 @@ import image "core:image/png"
 
 /*
     TODO: Defer image_ptr destruction
-
+    
+    Asset Manager: 
+        Asset Manager to avoid the creation of new textures after every restart
     UI:
         Buttons
         Screen Startup
@@ -405,8 +407,10 @@ free_zero_adjacent::proc(button:^Button)
         for c :=- 1; c <=1; c += 1
         {
             if r == 0 && c == 0 { continue }
+
             new_row := cast(int)row + r
             new_col := cast(int)col + c
+            
             if (new_row >=0 && new_row < 10 && new_col >=0 && new_col < 10)
             {
                 if buttons[new_col + 10 * new_row].hint == 0
@@ -425,6 +429,10 @@ free_zero_adjacent::proc(button:^Button)
     }
 }
 
+delete_button_resources::proc(button:^Button)
+{
+    gl.DeleteTextures(1,&button.sprite.texture)
+}
 expose_button::proc(button:^Button)
 {
     clear(&visited)
@@ -432,7 +440,7 @@ expose_button::proc(button:^Button)
     {
         game_state = GAME_STATE.GAME_OVER
 
-        button.sprite.texture = create_bomb_texture()
+        // button.sprite.texture = create_bomb_texture()
         button.sprite.color = {0.0,0.0,0.0}
     }
     if button.hint == 0
@@ -658,7 +666,7 @@ initialize_buttons::proc(buttons:^[100]Button)
                 },
                 sprite = {
                     color = {0.30,0.3,0.4},
-                    texture = create_fonts('@')                    
+                    // texture = create_fonts('@')                    
                 },
                 hint =0,
                 _index = cast(i32)button_index
@@ -853,6 +861,11 @@ user_game_over_input::proc() ->bool
 
     if glfw.GetKey(window,glfw.KEY_SPACE) == glfw.PRESS
     {
+        for &button in buttons
+        {
+            delete_button_resources(&button)
+        }
+
         initialize_buttons(&buttons)
         clear(&visited)
         clear(&num_reaveled)
@@ -937,7 +950,6 @@ main::proc()
      gl.BindVertexArray(0)
      gl.BindBuffer(gl.ARRAY_BUFFER,0)
     
-
     initialize_buttons(&buttons)
 
     bottom:Button = {
@@ -946,7 +958,7 @@ main::proc()
             size = { 0.5,0.5}
         },
         sprite = {
-            texture = create_bomb_texture()
+            // texture = create_bomb_texture()
         }
     }
 
